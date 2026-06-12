@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Celestine — FrameNet Annotator</title>
+  <title>Annotator of reporting-related FrameNet frames in legal documents</title>
   <style>
     body {
       font-family: monospace;
@@ -49,31 +49,111 @@
       display: none;
     }
     #status { margin-top: 8px; color: #666; font-size: 0.9em; }
+
+    /* ── Visualization ── */
+    #viz {
+      margin-top: 28px;
+      display: none;
+    }
+    #viz h2 {
+      font-size: 1em;
+      margin-bottom: 12px;
+      color: #444;
+    }
+    .frame-row {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+    }
+    .frame-label {
+      display: inline-block;
+      background: #2c5f8a;
+      color: #fff;
+      font-size: 0.8em;
+      padding: 2px 8px;
+      border-radius: 3px;
+      margin-bottom: 14px;
+    }
+    .sentence-viz {
+      font-size: 1.1em;
+      line-height: 2.8em;
+      padding: 8px 4px;
+    }
+    .fe-span {
+      display: inline;
+      padding: 2px 3px;
+      border-radius: 2px;
+      cursor: default;
+    }
+    .target-span {
+      outline: 2px solid #222;
+      outline-offset: 1px;
+      font-weight: bold;
+    }
+    .fe-legend {
+      margin-top: 18px;
+      font-size: 0.85em;
+    }
+    .fe-legend span {
+      display: inline-block;
+      margin-right: 14px;
+      margin-bottom: 4px;
+    }
+    .fe-legend .swatch {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 3px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
-  <h1>Celestine — FrameNet Annotator</h1>
-  <p class="subtitle">Frames: Conditional_scenario · Request · Time_period_of_action · Time_vector</p>
+  <h1>Annotator of reporting-related FrameNet frames in legal documents</h1>
+  <p class="subtitle">Frames: Conditional_scenario · Request · Time_period_of_action · Time_vector · Receiving · Calendric_unit · Frequency</p>
 
   <textarea id="sentence" placeholder="Paste a sentence here..."></textarea>
   <br>
   <button id="btn" onclick="annotate()">Annotate</button>
   <div id="status"></div>
+
+  <div id="viz">
+    <h2>Annotation</h2>
+    <div id="viz-frames"></div>
+  </div>
+
   <pre id="output"></pre>
 
   <script>
+    // Colour palette for FE spans (cycles if more than 8 FEs)
+    const FE_COLORS = [
+      { bg: '#d4e8ff', fg: '#0a3d6b' },
+      { bg: '#d4f7d4', fg: '#1a5c1a' },
+      { bg: '#fff0cc', fg: '#7a5000' },
+      { bg: '#ffd4d4', fg: '#7a0000' },
+      { bg: '#e8d4ff', fg: '#3d0a6b' },
+      { bg: '#d4fff0', fg: '#005c3d' },
+      { bg: '#ffd4f0', fg: '#6b0a3d' },
+      { bg: '#f0ffd4', fg: '#3d5c00' },
+    ];
+
     async function annotate() {
       const sentence = document.getElementById('sentence').value.trim();
       if (!sentence) return;
 
-      const btn = document.getElementById('btn');
+      const btn    = document.getElementById('btn');
       const status = document.getElementById('status');
       const output = document.getElementById('output');
+      const viz    = document.getElementById('viz');
 
       btn.disabled = true;
       status.textContent = 'Annotating…';
       output.style.display = 'none';
       output.textContent = '';
+      viz.style.display = 'none';
 
       try {
         const resp = await fetch('/annotate', {
@@ -85,6 +165,7 @@
         output.textContent = JSON.stringify(json, null, 2);
         output.style.display = 'block';
         status.textContent = resp.ok ? '' : 'Error from server.';
+        if (resp.ok && json.frames && json.frames.length > 0) renderViz(json);
       } catch (e) {
         status.textContent = 'Request failed: ' + e.message;
       } finally {
@@ -92,9 +173,102 @@
       }
     }
 
+    function renderViz(data) {
+      const container = document.getElementById('viz-frames');
+      container.innerHTML = '';
+
+      (data.frames || []).forEach(frameData => {
+        const fes = (frameData.fes || [])
+          .filter(fe => !fe.incorporated && fe.start != null && fe.start >= 0)
+          .sort((a, b) => a.start - b.start);
+
+        const colorMap = {};
+        fes.forEach((fe, i) => {
+          colorMap[fe.name] = FE_COLORS[i % FE_COLORS.length];
+        });
+
+        const sentence = data.sentence;
+        const target   = frameData.target;
+
+        // Build event list
+        const events = [];
+        fes.forEach(fe => {
+          events.push({ pos: fe.start, open: true,  fe });
+          events.push({ pos: fe.end,   open: false, fe });
+        });
+        if (target && target.start >= 0) {
+          events.push({ pos: target.start, open: true,  isTarget: true });
+          events.push({ pos: target.end,   open: false, isTarget: true });
+        }
+        events.sort((a, b) => a.pos - b.pos || (a.open ? -1 : 1));
+
+        const allPositions = [...new Set(events.map(e => e.pos))].sort((a, b) => a - b);
+        if (!allPositions.includes(sentence.length)) allPositions.push(sentence.length);
+
+        let html = '';
+        let cur = 0;
+        const openFes = [];
+
+        for (const boundary of allPositions) {
+          if (boundary > cur) html += esc(sentence.slice(cur, boundary));
+          const here = events.filter(e => e.pos === boundary);
+          here.filter(e => !e.open).forEach(e => {
+            openFes.splice(openFes.indexOf(e.fe), 1);
+            html += '</span>';
+          });
+          here.filter(e => e.open).forEach(e => {
+            if (e.isTarget) {
+              html += '<span class="target-span">';
+            } else {
+              openFes.push(e.fe);
+              const c = colorMap[e.fe.name];
+              html += '<span class="fe-span" style="background:' + c.bg +
+                      ';color:' + c.fg + '" title="' + esc(e.fe.name) + '">';
+            }
+          });
+          cur = boundary;
+        }
+
+        // Legend
+        let legend = '';
+        fes.forEach(fe => {
+          const c = colorMap[fe.name];
+          legend += '<span><span class="swatch" style="background:' + c.bg +
+                    ';border:1px solid ' + c.fg + '"></span>' + esc(fe.name) + '</span>';
+        });
+        if (target && target.start >= 0) {
+          legend += '<span><span class="swatch" style="background:#fff;border:2px solid #222"></span>TARGET</span>';
+        }
+
+        // Build the row
+        const row = document.createElement('div');
+        row.className = 'frame-row';
+        row.innerHTML =
+          '<div class="frame-label">' + esc(frameData.frame) + '</div>' +
+          '<div class="sentence-viz">' + html + '</div>' +
+          '<div class="fe-legend">' + legend + '</div>';
+        container.appendChild(row);
+      });
+
+      document.getElementById('viz').style.display = 'block';
+    }
+
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
     document.getElementById('sentence').addEventListener('keydown', function(e) {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) annotate();
     });
   </script>
+  <footer style="margin-top:48px;padding-top:16px;border-top:1px solid #ddd;font-size:0.8em;color:#888;">
+    <p>Celéstine Lecat, Víctor Rodríguez-Doncel, Monica Palmirani<br>
+    Università di Bologna · Universidad Politécnica de Madrid</p>
+    <p><em>Disclaimer: this is a toy prototype. Do not consider this output seriously.</em></p>
+  </footer>
 </body>
 </html>

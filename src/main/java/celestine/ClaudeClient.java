@@ -1,5 +1,10 @@
 package celestine;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -8,12 +13,19 @@ import java.nio.charset.StandardCharsets;
 
 public class ClaudeClient {
 
+    // Set CELESTINE_DEBUG=1 to log full request/response payloads to stderr.
+    private static final boolean DEBUG =
+            "1".equals(System.getenv("CELESTINE_DEBUG"))
+            || "true".equalsIgnoreCase(System.getenv("CELESTINE_DEBUG"));
+
+    private static final Gson GSON = new Gson();
+
     private static final String API_URL = "https://api.anthropic.com/v1/messages";
     private static final String MODEL = "claude-sonnet-4-6";
     private static final int MAX_TOKENS = 1024;
 
     private static final String SYSTEM_PROMPT = """
-You are a FrameNet semantic annotator. Given an English sentence, identify the single most dominant frame it evokes from the list below and annotate it.
+You are a FrameNet semantic annotator. Given an English sentence, identify up to 3 frames it evokes from the list below, ordered by relevance to reporting duties in legal documents. Prioritise frames in this order: Request, Receiving, Conditional_scenario, Time_period_of_action, Time_vector, Frequency, Calendric_unit.
 
 FRAMES:
 
@@ -35,23 +47,46 @@ FRAMES:
    An Event occurs at a particular Distance and Direction from a Landmark_event. Direction is often incorporated into the lexical unit (e.g. "ago", "before").
    Core FEs: Direction, Distance, Event, Landmark_event
 
+5. Receiving
+   A Recipient comes into possession of a Theme transferred from a Donor (e.g. an authority receives a report submitted by an entity).
+   Core FEs: Donor, Recipient, Theme
+   Non-core FEs: Means, Manner, Place, Time, Purpose_of_theme
+
+6. Calendric_unit
+   Names a conventional Unit of time within a calendric system (e.g. day, week, month, quarter, year), optionally positioned by Relative_time or within a larger Whole.
+   Core FEs: Unit, Name, Relative_time
+   Non-core FEs: Whole, Salient_event
+
+7. Frequency
+   An Event recurs on a regular basis, characterized by how often it occurs over an Interval (e.g. "quarterly", "annually", "every month").
+   Core FEs: Event, Interval
+   Non-core FEs: Attribute, Degree, Rate, Salient_entity
+
 RULES:
-- Identify the TARGET: the word or phrase that lexically evokes the frame.
-- Identify each Frame Element (FE) by its exact character offsets in the original sentence (0-indexed).
+- Identify the TARGET: the content word or phrase (main verb, noun, adjective, adverb) that lexically evokes the frame. Modal auxiliaries (shall, must, may, should, will) are never targets — look for the main verb they modify.
+- Identify each Frame Element (FE) by copying the exact substring as it appears in the sentence. Do not paraphrase.
 - Only annotate FEs that are explicitly present in the text. Do not infer absent elements.
-- Incorporated FEs (encoded in the target word itself, e.g. Direction in "ago") should be listed with "incorporated": true and no offsets.
+- Incorporated FEs (encoded in the target word itself, e.g. Direction in "ago") should be listed with "incorporated": true and no text field.
+- If the sentence does not clearly evoke any of the listed frames, return "frame": null and empty arrays.
 - Return ONLY valid JSON, no explanation, no markdown fences.
 
 OUTPUT FORMAT:
 {
   "sentence": "<original sentence>",
-  "frame": "<frame name>",
-  "target": { "text": "<target word>", "start": <int>, "end": <int> },
-  "fes": [
-    { "name": "<FE name>", "text": "<span text>", "start": <int>, "end": <int> },
-    { "name": "<FE name>", "incorporated": true }
+  "frames": [
+    {
+      "frame": "<frame name>",
+      "target": "<target word or phrase>",
+      "fes": [
+        { "name": "<FE name>", "text": "<exact substring from sentence>" },
+        { "name": "<FE name>", "incorporated": true }
+      ]
+    }
   ]
 }
+
+If no frame matches:
+{ "sentence": "<original sentence>", "frames": [] }
 """;
 
     private final HttpClient http;
@@ -65,21 +100,21 @@ OUTPUT FORMAT:
     public String annotate(String sentence) throws Exception {
         String userMessage = "Annotate this sentence: " + sentence;
 
-        String body = """
-                {
-                  "model": "%s",
-                  "max_tokens": %d,
-                  "system": %s,
-                  "messages": [
-                    { "role": "user", "content": %s }
-                  ]
-                }
-                """.formatted(
-                MODEL,
-                MAX_TOKENS,
-                toJsonString(SYSTEM_PROMPT),
-                toJsonString(userMessage)
-        );
+        // Build the request with Gson so all string escaping is handled correctly.
+        JsonObject message = new JsonObject();
+        message.addProperty("role", "user");
+        message.addProperty("content", userMessage);
+        JsonArray messages = new JsonArray();
+        messages.add(message);
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("model", MODEL);
+        payload.addProperty("max_tokens", MAX_TOKENS);
+        payload.addProperty("system", SYSTEM_PROMPT);
+        payload.add("messages", messages);
+
+        String body = GSON.toJson(payload);
+        if (DEBUG) System.err.println("[ClaudeClient] request body:\n" + body);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(API_URL))
@@ -90,6 +125,10 @@ OUTPUT FORMAT:
                 .build();
 
         HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
+        if (DEBUG) {
+            System.err.println("[ClaudeClient] HTTP " + response.statusCode());
+            System.err.println("[ClaudeClient] response body:\n" + response.body());
+        }
 
         if (response.statusCode() != 200) {
             throw new RuntimeException("Claude API error " + response.statusCode() + ": " + response.body());
@@ -98,26 +137,45 @@ OUTPUT FORMAT:
         return extractText(response.body());
     }
 
-    // Extracts the text content from Claude's response envelope
+    // Extracts and concatenates the text blocks from Claude's response envelope.
     private String extractText(String responseJson) {
-        // Minimal extraction: find "text" field in content array
-        int idx = responseJson.indexOf("\"text\"");
-        if (idx == -1) throw new RuntimeException("Unexpected Claude response: " + responseJson);
-        int start = responseJson.indexOf("\"", idx + 7) + 1;
-        int end = responseJson.lastIndexOf("\"");
-        String raw = responseJson.substring(start, end);
-        // Unescape JSON string
-        return raw.replace("\\n", "\n").replace("\\\"", "\"").replace("\\\\", "\\");
+        JsonObject root;
+        try {
+            root = JsonParser.parseString(responseJson).getAsJsonObject();
+        } catch (RuntimeException e) {
+            throw new RuntimeException("Could not parse Claude response as JSON: " + responseJson, e);
+        }
+
+        // Surface an API-level error object if present.
+        if (root.has("error")) {
+            throw new RuntimeException("Claude API error: " + root.get("error"));
+        }
+
+        JsonArray content = root.getAsJsonArray("content");
+        if (content == null) {
+            throw new RuntimeException("Claude response has no 'content' array: " + responseJson);
+        }
+
+        StringBuilder text = new StringBuilder();
+        for (JsonElement element : content) {
+            JsonObject block = element.getAsJsonObject();
+            if (block.has("type") && "text".equals(block.get("type").getAsString())) {
+                text.append(block.get("text").getAsString());
+            }
+        }
+
+        return stripCodeFences(text.toString().trim());
     }
 
-    // Escapes a Java string for embedding as a JSON string value
-    private String toJsonString(String s) {
-        return "\"" + s
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t")
-                + "\"";
+    // Defensive: if the model wraps its JSON in a ```json ... ``` fence, unwrap it.
+    private String stripCodeFences(String s) {
+        if (s.startsWith("```")) {
+            int firstNewline = s.indexOf('\n');
+            int lastFence = s.lastIndexOf("```");
+            if (firstNewline != -1 && lastFence > firstNewline) {
+                return s.substring(firstNewline + 1, lastFence).trim();
+            }
+        }
+        return s;
     }
 }

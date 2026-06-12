@@ -35,11 +35,17 @@ public class AnnotateHandler implements HttpHandler {
             return;
         }
 
+        System.out.println("[annotate] sentence: " + sentence);
         try {
             String annotation = claude.annotate(sentence);
-            sendJson(exchange, 200, annotation);
+            String resolved  = OffsetResolver.resolve(annotation);
+            sendJson(exchange, 200, resolved);
         } catch (Exception e) {
-            String error = "{\"error\": \"" + e.getMessage().replace("\"", "'") + "\"}";
+            // Log the full stack trace server-side so failures are diagnosable.
+            System.err.println("[annotate] failed for sentence: " + sentence);
+            e.printStackTrace();
+            String message = e.getMessage() == null ? e.toString() : e.getMessage();
+            String error = "{\"error\": \"" + message.replace("\\", "\\\\").replace("\"", "'") + "\"}";
             sendJson(exchange, 500, error);
         }
     }
