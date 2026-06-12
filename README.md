@@ -111,7 +111,7 @@ Convert the frame definitions and annotations produced by Celestine into a prope
 
 ### Connect to Framester
 
-**Framester** (Gangemi, Alam, Asprino, Presutti, Recupero — EKAW 2016; https://framester.github.io/) is a large-scale RDF/OWL linked data hub that integrates FrameNet, WordNet, VerbNet, PropBank and DBpedia into a single graph, with frames represented as OWL classes and frame elements as properties. It is the most complete existing RDF treatment of FrameNet and a natural upper layer for Celestine's domain-specific frame vocabulary. Linking Celestine annotations to Framester URIs would make them interoperable with any other resource already aligned to Framester. Framester also uses OntoLex-Lemon for its lexical layer: OntoLex-Lemon represents the lexical units that evoke frames (the words *"notify"*, *"submit"*, *"within"*) via `ontolex:evokes`, while the frame concepts themselves are expressed in OWL — the two vocabularies are complementary, not competing.
+**Framester** (Gangemi, Alam, Asprino, Presutti, Recupero — EKAW 2016; https://framester.github.io/) is a large-scale RDF/OWL linked data hub that integrates FrameNet, WordNet, VerbNet, PropBank and DBpedia into a single graph, with frames represented as OWL classes and frame elements as properties. It is the most complete existing RDF treatment of FrameNet and a natural upper layer for Celestine's domain-specific frame vocabulary. Linking Celestine annotations to Framester URIs would make them interoperable with any other resource already aligned to Framester.
 
 > Gangemi, A., Alam, M., Asprino, L., Presutti, V., & Recupero, D. R. (2016). *Framester: A Wide Coverage Linguistic Linked Data Hub.* In EKAW 2016, Springer LNAI 10024.
 
@@ -128,8 +128,27 @@ Build on the work in **ContractFrames: Bridging the Gap Between Natural Language
 - **Akoma Ntoso / LegalDocML** — annotated provisions could be embedded as metadata inside AKN documents, linking frame annotations to the structural elements (article, paragraph, point) they describe.
 - **ELI (European Legislation Identifier)** — frame annotations could be published as linked data referencing ELI URIs, enabling SPARQL queries such as *"find all provisions that evoke a Request frame where the Speaker is the Commission"*.
 - **ALLOT / DOLCE** — Monica Palmirani's ALLOT ontology for legal text already models agents, roles and events; frames could be mapped onto ALLOT classes.
-- **OntoLex-Lemon** — the W3C standard for representing lexical resources as linked data; the frame lexicon itself (LUs, FEs) could be published in this format.
 - **PropBank / VerbNet** — complementary lexical resources that could be cross-linked to increase coverage of legal verbs not yet in the Celestine frame set.
+
+### FrameNet 1.7 dataset
+
+The FrameNet 1.7 corpus (frames, lexical units, frame-to-frame relations, annotated sentences) can be downloaded from:
+https://www.kaggle.com/datasets/nltkdata/framenet?resource=download
+
+It is also installable directly via NLTK:
+```python
+import nltk
+nltk.download('framenet_v17')
+```
+
+The dataset is the basis for any graph-based extension of Celestine (RGCN, embeddings, link prediction).
+
+### Reproduce or extend KID (Zheng et al., NAACL 2022)
+
+The double-graph framework (KID) described in the Comments section is publicly available:
+https://github.com/PKUnlp-icler/KID
+
+It achieves Full structure F1 of 81.7 on FN 1.5 and 82.2 on FN 1.7 (BERT variant). The GloVe variant runs without a GPU and is a good starting point. An interesting open question for future work is whether KID trained on general FN 1.7 transfers to regulatory legal text, or whether the domain shift degrades performance — and how a hybrid approach combining KID with Celestine's LLM-based annotations could close that gap.
 
 ### Frame interaction graph
 

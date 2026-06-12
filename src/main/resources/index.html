@@ -115,7 +115,7 @@
   <h1>Annotator of reporting-related FrameNet frames in legal documents</h1>
   <p class="subtitle">Frames: Conditional_scenario · Request · Time_period_of_action · Time_vector · Receiving · Calendric_unit · Frequency</p>
 
-  <textarea id="sentence" placeholder="Paste a sentence here..."></textarea>
+  <textarea id="sentence" placeholder="Paste some text here..."></textarea>
   <br>
   <button id="btn" onclick="annotate()">Annotate</button>
   <div id="status"></div>
@@ -241,10 +241,11 @@
         }
 
         // Build the row
+        const frameUrl = 'https://framenet.icsi.berkeley.edu/frames/' + encodeURIComponent(frameData.frame);
         const row = document.createElement('div');
         row.className = 'frame-row';
         row.innerHTML =
-          '<div class="frame-label">' + esc(frameData.frame) + '</div>' +
+          '<div><a class="frame-label" href="' + frameUrl + '" target="_blank" rel="noopener">' + esc(frameData.frame) + '</a></div>' +
           '<div class="sentence-viz">' + html + '</div>' +
           '<div class="fe-legend">' + legend + '</div>';
         container.appendChild(row);
