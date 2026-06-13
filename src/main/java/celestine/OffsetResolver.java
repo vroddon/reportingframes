@@ -22,8 +22,11 @@ public class OffsetResolver {
 
         if (root.has("frames") && root.get("frames").isJsonArray()) {
             JsonArray frames = root.getAsJsonArray("frames");
+            // Per-target cursor: repeated identical target words resolve to
+            // successive occurrences instead of all collapsing onto the first.
+            java.util.Map<String, Integer> targetCursor = new java.util.HashMap<>();
             for (JsonElement el : frames) {
-                resolveFrame(el.getAsJsonObject(), fullText);
+                resolveFrame(el.getAsJsonObject(), fullText, targetCursor);
             }
             root.add("frames", prioritise(frames));
         }
@@ -63,19 +66,28 @@ public class OffsetResolver {
         return PRIORITY.length;
     }
 
-    private static void resolveFrame(JsonObject frameObj, String fullText) {
-        // Resolve target first — we need its position to constrain FE search
+    private static void resolveFrame(JsonObject frameObj, String fullText,
+                                     java.util.Map<String, Integer> targetCursor) {
+        // Resolve target first — we need its position to constrain and anchor FE search
         int sentenceStart = 0;
         int sentenceEnd   = fullText.length();
+        int targetStart   = -1;
+        int targetEnd     = -1;
 
         if (frameObj.has("target") && !frameObj.get("target").isJsonNull()) {
             String targetText = frameObj.get("target").getAsString();
-            int[] offsets = findOffsets(fullText, targetText, 0);
+            int from = targetCursor.getOrDefault(targetText, 0);
+            int[] offsets = findOffsets(fullText, targetText, from);
 
             if (offsets[0] >= 0) {
+                targetStart   = offsets[0];
+                targetEnd     = offsets[1];
                 // Find the sentence boundaries around the target
                 sentenceStart = sentenceStartBefore(fullText, offsets[0]);
                 sentenceEnd   = sentenceEndAfter(fullText, offsets[1]);
+                // Advance the cursor so the next frame with the same target word
+                // resolves to the following occurrence, not this one again.
+                targetCursor.put(targetText, offsets[1]);
             }
 
             JsonObject targetObj = new JsonObject();
@@ -85,7 +97,9 @@ public class OffsetResolver {
             frameObj.add("target", targetObj);
         }
 
-        // Resolve FEs — search only within the sentence that contains the target
+        // Resolve FEs within the target's sentence, choosing the occurrence
+        // nearest the target (and preferring whole-word matches). This stops a
+        // short filler such as "it" from binding to an earlier, unrelated "it".
         if (frameObj.has("fes") && frameObj.get("fes").isJsonArray()) {
             JsonArray fes = frameObj.getAsJsonArray("fes");
             for (JsonElement el : fes) {
@@ -93,7 +107,8 @@ public class OffsetResolver {
                 if (fe.has("incorporated") && fe.get("incorporated").getAsBoolean()) continue;
                 if (!fe.has("text") || fe.get("text").isJsonNull()) continue;
                 String feText = fe.get("text").getAsString();
-                int[] offsets = findOffsets(fullText, feText, sentenceStart);
+                int[] offsets = findNearest(fullText, feText, sentenceStart, sentenceEnd,
+                                            targetStart, targetEnd);
                 // Accept only if found within the same sentence
                 if (offsets[0] >= sentenceStart && offsets[1] <= sentenceEnd) {
                     fe.addProperty("start", offsets[0]);
@@ -104,6 +119,66 @@ public class OffsetResolver {
                 }
             }
         }
+    }
+
+    /**
+     * Finds the occurrence of needle within [regionStart, regionEnd) that lies
+     * closest to the target span [targetStart, targetEnd), preferring whole-word
+     * matches. Tries an exact match first, then a case-insensitive one. Returns
+     * [-1, -1] if not found in the region.
+     */
+    private static int[] findNearest(String text, String needle,
+                                     int regionStart, int regionEnd,
+                                     int targetStart, int targetEnd) {
+        if (needle == null || needle.isEmpty()) return new int[]{-1, -1};
+        int[] hit = bestOccurrence(text, needle, false, regionStart, regionEnd, targetStart, targetEnd);
+        if (hit[0] >= 0) return hit;
+        return bestOccurrence(text, needle, true, regionStart, regionEnd, targetStart, targetEnd);
+    }
+
+    private static int[] bestOccurrence(String text, String needle, boolean caseInsensitive,
+                                        int regionStart, int regionEnd,
+                                        int targetStart, int targetEnd) {
+        String hay = caseInsensitive ? text.toLowerCase() : text;
+        String ndl = caseInsensitive ? needle.toLowerCase() : needle;
+        int len = ndl.length();
+        int from = Math.max(0, regionStart);
+
+        int  bestStart    = -1;
+        int  bestBoundary = Integer.MAX_VALUE; // 0 = whole-word match (preferred)
+        long bestDistance = Long.MAX_VALUE;
+
+        for (int idx = hay.indexOf(ndl, from); idx >= 0 && idx + len <= regionEnd;
+             idx = hay.indexOf(ndl, idx + 1)) {
+            int  boundary = wholeWord(text, idx, idx + len, needle) ? 0 : 1;
+            long distance = spanDistance(idx, idx + len, targetStart, targetEnd, regionStart);
+            if (boundary < bestBoundary
+                    || (boundary == bestBoundary && distance < bestDistance)) {
+                bestBoundary = boundary;
+                bestDistance = distance;
+                bestStart    = idx;
+            }
+        }
+        return bestStart < 0 ? new int[]{-1, -1} : new int[]{bestStart, bestStart + len};
+    }
+
+    // Distance between a candidate span and the target span; 0 if they overlap.
+    // With no resolved target, falls back to preferring the earliest occurrence.
+    private static long spanDistance(int start, int end, int targetStart, int targetEnd, int regionStart) {
+        if (targetStart < 0) return start - regionStart;
+        if (end <= targetStart) return targetStart - end;
+        if (start >= targetEnd) return start - targetEnd;
+        return 0;
+    }
+
+    // True if the match sits on word boundaries — only enforced on the sides
+    // where the needle itself begins/ends with a word character.
+    private static boolean wholeWord(String text, int start, int end, String needle) {
+        boolean leftWord  = Character.isLetterOrDigit(needle.charAt(0));
+        boolean rightWord = Character.isLetterOrDigit(needle.charAt(needle.length() - 1));
+        boolean leftOk  = !leftWord  || start == 0             || !Character.isLetterOrDigit(text.charAt(start - 1));
+        boolean rightOk = !rightWord || end   == text.length() || !Character.isLetterOrDigit(text.charAt(end));
+        return leftOk && rightOk;
     }
 
     /**

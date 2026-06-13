@@ -35,13 +35,17 @@ A Dataset and Baseline}}
 \maketitle
 
 \begin{abstract}
-TODO. This paper presents a gold standard dataset of legal provisions
-annotated with FrameNet frames, focusing on reporting obligations
-in European Union law. We define a domain-specific frame inventory,
-describe the annotation methodology, and provide a baseline annotation
-system built on a large language model. We discuss applications of the
-resource to legal knowledge representation, compliance analysis, and
-frame-based reasoning.
+Reporting obligations are among the most pervasive instruments of European Union
+regulation, yet locating and interpreting them in legal text remains largely
+manual. We present a frame-semantic resource for this task: a domain-specific
+inventory of FrameNet frames tailored to reporting obligations and centred on the
+reporting act, a gold-standard dataset that annotates the corpus of reporting
+requirements of Palmirani et al. provision by provision, and a baseline
+annotation system that reproduces the same annotations automatically using a
+large language model. The annotations are serialised as interoperable linked data
+using the NIF standard, with frames linked to Framester URIs and provisions to
+the European Legislation Identifier, so that the resulting frame graphs can feed
+legal knowledge graphs and compliance analysis.
 \end{abstract}
 
 % ---------------------------------------------------------------
@@ -185,58 +189,207 @@ obligations, providing a natural bridge towards ontologies of this kind.
 \section{Dataset}
 \label{sec:dataset}
 
-TODO.
+The dataset is built on top of the corpus assembled by Palmirani et
+al.~\cite{palmirani-2025-reporting} for their Reporting Requirements Ontology.
+It consists of $93$ reporting requirements drawn from European Union legislation
+across a range of regulatory domains --- among them prudential banking
+supervision, securities markets, central counterparties and product approval ---
+each one a self-contained provision (typically an article paragraph or
+subparagraph) that imposes a duty to transmit specified information to a
+competent authority. Reusing this corpus means that our frame annotations are
+grounded in provisions whose actors, reported content and temporal conditions
+have already been studied and modelled at the ontological level, so that the
+linguistic layer we add aligns directly with an existing conceptual
+representation of the same texts.
 
-\subsection{Source Corpus}
+Each provision is manually annotated with the tailored subset of
+FrameNet~\cite{baker-etal-1998-berkeley} frames defined for reporting
+obligations --- with \textsc{Telling} as the central reporting act, alongside
+\textsc{Request}, \textsc{Receiving} and the conditional and temporal frames ---
+yielding, for every reporting requirement, a small
+\emph{frame graph}: the set of frames it evokes together with the participants
+and temporal parameters that fill their frame elements. A provision such as
+\textit{``Within $270$ days of receipt of the conclusions of the evaluation, the
+Agency shall prepare and submit to the Commission an opinion''} thus surfaces a
+\textsc{Telling} frame (the obligated party, the recipient authority and the
+reported content) anchored to the temporal frames that express its deadline.
+The annotation was carried out by a single annotator, Célestine Lecat, a
+linguist rather than a legal expert; frames and frame elements are therefore
+assigned on linguistic, frame-semantic grounds --- according to the predicates
+and arguments actually realised in the text --- rather than through legal
+interpretation of the underlying obligation. This keeps the annotation close to
+the surface evidence and reproducible from the wording alone, while leaving the
+legal characterisation of each duty to the complementary ontological layer.
 
-TODO.
-
-\subsection{Annotation Methodology}
-
-TODO.
-
-\subsection{Dataset Statistics}
-
-TODO.
+The resulting annotations are serialised differently from the ontology
+population of Palmirani et al. Rather than instantiating domain classes, we
+publish them as interoperable linked data following the NIF
+standard~\cite{hellmann2013nif}: every provision is a \texttt{nif:Context}
+carrying its verbatim text and character offsets, and each target and frame
+element is a NIF string span with explicit begin and end indices into that
+context. Frames are typed with their Framester~\cite{gangemi2016framester} URIs,
+linking every annotation into the wider FrameNet/WordNet/VerbNet knowledge graph,
+and each provision is related through the European Legislation Identifier (ELI)
+to the act it is drawn from. The corpus is distributed as Turtle, so that the
+frame graphs can be queried with SPARQL and joined, via their Framester and ELI
+links, both to the Framester ecosystem and to the Reporting Requirements
+Ontology.
 
 % ---------------------------------------------------------------
 \section{Baseline Annotation System}
 \label{sec:baseline}
 
-TODO.
+To accompany the dataset we provide a baseline annotation system that produces
+the same kind of frame graphs automatically. In keeping with its role as a
+baseline, it deliberately avoids any task-specific training: rather than learning
+a dedicated graph-construction model in the manner of
+Zheng~et~al.~\cite{zheng-etal-2022-double}, it delegates frame identification and
+role labelling to a general-purpose large language model steered entirely by an
+instruction prompt, and reserves all character-level bookkeeping for a
+deterministic post-processor. It thus establishes a simple, reproducible
+reference point against which both the gold standard and future dedicated parsers
+can be compared.
 
 \subsection{System Description}
 
-TODO.
+The system is a small Java web application exposing a single annotation
+endpoint. A provision submitted through the endpoint passes through a three-stage
+pipeline: prompting a large language model, resolving the returned text spans to
+character offsets, and serialising the result as linked data.
+
+The first stage is built on Claude (Anthropic), specifically the Claude Sonnet
+model (identifier \texttt{claude-sonnet-4-6}), queried through the Messages API
+in a zero-shot, instruction-only setting --- the prompt contains no annotated
+examples. A fixed system prompt encodes the tailored frame inventory: for each
+frame it gives a one-line definition together with its core and non-core frame
+elements, and it states the annotation rules that the gold standard follows. The
+salient rules are that the target must be the content word that lexically evokes
+the frame (modal auxiliaries such as \textit{shall} or \textit{must} are never
+targets, only the main verb they modify), that every frame element must be copied
+as an exact substring of the provision rather than paraphrased, and that elements
+incorporated into the target itself are flagged rather than given a span. The
+inventory is applied in two passes: the model first exhaustively annotates
+\emph{every} \textsc{Telling} and \textsc{Request} frame in the provision --- so
+that a passage with separate \textit{inform} and \textit{disclose} clauses yields
+two distinct frames --- and then adds the most relevant remaining temporal and
+conditional frames. The model returns a JSON structure listing, for each frame,
+its name, its target and its frame elements as verbatim text spans.
+
+Asking the model only for the text of each span, and not for numeric offsets,
+isolates the annotation from the well-known unreliability of language models at
+character counting. The second stage therefore resolves these spans
+deterministically against the original provision. Each target is located in the
+text and used to delimit the sentence that contains it; the frame elements of
+that frame are then searched only within that sentence, and, where a span occurs
+more than once, the occurrence closest to the target is chosen, with a preference
+for whole-word matches. This positional resolution prevents a short element such
+as the pronoun \textit{it} from binding to an unrelated earlier occurrence, and a
+per-target cursor ensures that a verb repeated across several reporting acts maps
+each frame to a successive occurrence. The resolved frames are finally ordered by
+their relevance to reporting duties, with \textsc{Telling} first.
+
+The third stage serialises the annotated provision as described in
+Section~\ref{sec:dataset}: frames are emitted with their Framester URIs and the
+target and frame-element spans as NIF strings carrying their begin and end
+indices, producing Turtle that is interoperable with the rest of the dataset. The
+same annotation is also available as raw JSON, and a lightweight web interface
+(Figure~\ref{fig:demo}) renders the frames over the provision text and offers both serialisations for
+download, so that automatic annotations can be inspected and exported in the same
+format as the human-annotated gold standard.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=\linewidth]{figure1.png}
+  \caption{The web demo of the baseline annotation system. A provision is
+  annotated and the detected frames are rendered over its text, with the target
+  and frame-element spans highlighted; the JSON and Turtle serialisations can be
+  downloaded.}
+  \label{fig:demo}
+\end{figure}
 
 \subsection{Evaluation}
 
-TODO.
+% To be completed once the gold standard is annotated and the baseline is
+% evaluated against it.
 
 % ---------------------------------------------------------------
 \section{Applications}
 \label{sec:applications}
 
-TODO.
+Because each provision is annotated and published as interoperable linked data,
+the resource is intended less as an end in itself than as a bridge between the
+natural-language text of reporting obligations and the formal representations
+that legal and compliance systems operate on. We outline two application areas
+that motivate the design.
 
 \subsection{Legal Knowledge Graphs}
 
-TODO.
+The frame graphs provide the surface evidence from which legal knowledge graphs
+can be populated. Each annotated provision already makes explicit, in a
+normalised form, the participants and temporal parameters of a reporting duty ---
+who must report, to whom, what is reported, and under which deadlines, periodicity
+and conditions --- which are precisely the elements that the Reporting
+Requirements Ontology of Palmirani et al.~\cite{palmirani-2025-reporting} models
+as classes and properties. Sharing the same underlying corpus, the frame
+annotations can therefore be mapped onto that ontology to help populate it, the
+linguistic layer supplying the textual anchors for the conceptual one. Beyond a
+single ontology, typing frames with Framester~\cite{gangemi2016framester} URIs
+links every annotation into a wide linguistic knowledge graph that integrates
+FrameNet with WordNet, VerbNet and DBpedia, while the European Legislation
+Identifier connects each provision to the act it belongs to. The frame graphs are
+thus queryable with SPARQL and joinable across resources: one can ask, for
+instance, for all provisions that evoke a \textsc{Telling} frame whose recipient
+is a particular authority, or that attach a recurring \textsc{Frequency} to a
+reporting act.
 
 \subsection{Compliance Analysis}
 
-TODO.
+The same explicit structure supports compliance analysis. Identifying, monitoring
+and keeping reporting requirements current is costly precisely because they are
+scattered across many acts and expressed in dense prose; making their
+who--what--whom--when structure machine-readable is a step towards automating that
+work. The temporal frames isolate the conditions a compliance system must track ---
+\textsc{Time\_period\_of\_action} and \textsc{Time\_vector} for deadlines,
+\textsc{Frequency} and \textsc{Calendric\_unit} for periodicity --- while
+\textsc{Conditional\_scenario} captures the circumstances under which a duty is
+triggered, and the \textsc{Telling} and \textsc{Receiving} frames identify the
+obligated party and the recipient authority. A repository of provisions annotated
+in this way could underpin tasks such as deadline tracking, obligation inventories
+for a given regulated actor, and the detection of changes to reporting duties as
+legislation evolves.
 
 % ---------------------------------------------------------------
 \section{Conclusion}
 \label{sec:conclusion}
 
-TODO.
+We have presented a frame-semantic resource for legal reporting obligations: a
+domain-specific inventory of FrameNet frames centred on the reporting act, a
+gold-standard dataset built on the corpus of Palmirani et
+al.~\cite{palmirani-2025-reporting} and annotated provision by provision into
+interoperable linked data, and a baseline annotation system that reproduces the
+same frame graphs automatically using a large language model. By serialising the
+annotations with NIF~\cite{hellmann2013nif} and Framester~\cite{gangemi2016framester}
+URIs and linking them through the European Legislation Identifier, the resource is
+designed to feed legal knowledge graphs and compliance analysis rather than to
+stand alone.
+
+Several directions remain open. The most immediate is to complete the manual
+annotation of the corpus and to evaluate the baseline against it, both on frame
+identification and on frame-element resolution. Beyond that, the per-provision
+frame graphs invite an explicit modelling of the relations between co-occurring
+frames --- a deadline attached to a reporting act, a condition governing it ---
+in the spirit of the double-graph parsing of
+Zheng~et~al.~\cite{zheng-etal-2022-double}, and a tighter alignment with the
+Reporting Requirements Ontology and with event vocabularies in the wider linked
+open data cloud.
 
 % ---------------------------------------------------------------
 \section*{Acknowledgements}
 
-TODO.
+This work was funded by the European Union under grant agreement
+No.~101169409 (HARNESS). It was also supported by the Proyecto
+PID2024-159504OB-I00 financiado por MICIU/AEI/10.13039/501100011033/ y por FEDER:
+Una manera de hacer Europa.
 
 % ---------------------------------------------------------------
 \bibliographystyle{plain}

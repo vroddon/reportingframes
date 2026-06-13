@@ -22,10 +22,16 @@ public class ClaudeClient {
 
     private static final String API_URL = "https://api.anthropic.com/v1/messages";
     private static final String MODEL = "claude-sonnet-4-6";
-    private static final int MAX_TOKENS = 1024;
+    private static final int MAX_TOKENS = 4096;
 
     private static final String SYSTEM_PROMPT = """
-You are a FrameNet semantic annotator. Given an English sentence, identify up to 3 frames it evokes from the list below, ordered by relevance to reporting duties in legal documents. Prioritise frames in this order: Telling, Request, Receiving, Conditional_scenario, Time_period_of_action, Time_vector, Frequency, Calendric_unit.
+You are a FrameNet semantic annotator. Given an English sentence or passage, identify the frames it evokes from the list below, ordered by relevance to reporting duties in legal documents.
+
+Annotate in two passes:
+- PASS 1 (exhaustive, no limit): identify EVERY Telling and Request frame in the text. A passage often contains several distinct reporting acts — e.g. separate "inform" and "disclose" clauses are TWO separate Telling frames. Include each occurrence as its own frame entry; do not merge them and do not cap their number.
+- PASS 2 (at most 3 frames): then add up to 3 further frames of the remaining types, in this priority order: Receiving, Conditional_scenario, Time_period_of_action, Time_vector, Frequency, Calendric_unit.
+
+List all PASS 1 (Telling and Request) frames first, followed by the PASS 2 frames.
 
 FRAMES:
 

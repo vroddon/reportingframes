@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reporting Frames Inventory</title>
+<style>
+  :root {
+    --bg: #fbfbfa;
+    --card: #ffffff;
+    --ink: #1c1c1e;
+    --muted: #6b6b70;
+    --line: #e4e4e7;
+    --accent: #1f5f8b;
+    --accent-soft: #e8f0f6;
+    --core: #1f5f8b;
+    --noncore: #8a8a8f;
+    --mono: ui-monospace, "SFMono-Regular", "Consolas", "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 3rem 1.5rem 5rem; }
+  header { border-bottom: 2px solid var(--line); padding-bottom: 1.5rem; margin-bottom: 2.5rem; }
+  h1 { font-size: 1.9rem; margin: 0 0 .4rem; letter-spacing: -0.01em; }
+  .subtitle { color: var(--muted); font-size: 1.02rem; margin: 0; }
+  .lead { font-size: 1.02rem; color: #333; }
+  .lead a { color: var(--accent); }
+  .order {
+    background: var(--accent-soft);
+    border: 1px solid #d4e2ee;
+    border-radius: 10px;
+    padding: .9rem 1.1rem;
+    margin: 1.5rem 0 2.5rem;
+    font-size: .95rem;
+  }
+  .order strong { color: var(--accent); }
+  .order ol { margin: .5rem 0 0; padding-left: 1.3rem; }
+  .order code { font-family: var(--mono); font-size: .9em; }
+
+  .frame {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1.4rem 1.5rem 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  }
+  .frame.primary { border-color: var(--accent); box-shadow: 0 1px 3px rgba(31,95,139,.18); }
+  .frame-head {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    flex-wrap: wrap;
+    margin-bottom: .35rem;
+  }
+  .frame-num {
+    font-family: var(--mono);
+    font-size: .8rem;
+    color: #fff;
+    background: var(--accent);
+    border-radius: 6px;
+    padding: .12rem .5rem;
+  }
+  .frame h2 {
+    font-size: 1.25rem;
+    margin: 0;
+    font-family: var(--mono);
+    letter-spacing: -0.01em;
+  }
+  .badge {
+    font-size: .68rem;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: 1px solid #cfe0ec;
+    border-radius: 6px;
+    padding: .1rem .45rem;
+  }
+  .fst-link {
+    margin-left: auto;
+    font-size: .8rem;
+    text-decoration: none;
+    color: var(--accent);
+    border: 1px solid #cfe0ec;
+    background: var(--accent-soft);
+    padding: .15rem .55rem;
+    border-radius: 6px;
+    white-space: nowrap;
+  }
+  .fst-link:hover { background: #d9e8f3; }
+  .desc { margin: .5rem 0 1rem; color: #2c2c2e; }
+  .fes { display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+  @media (max-width: 620px) { .fes { grid-template-columns: 1fr; } }
+  .fe-group h3 {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--muted);
+    margin: 0 0 .5rem;
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .chip {
+    font-family: var(--mono);
+    font-size: .82rem;
+    padding: .18rem .55rem;
+    border-radius: 6px;
+    border: 1px solid;
+  }
+  .chip.core { color: var(--core); background: #eef4f9; border-color: #d4e2ee; }
+  .chip.noncore { color: var(--noncore); background: #f4f4f5; border-color: #e4e4e7; }
+  .none { color: var(--muted); font-style: italic; font-size: .85rem; }
+
+  footer {
+    margin-top: 3rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+    font-size: .85rem;
+    color: var(--muted);
+  }
+  footer a { color: var(--accent); }
+  footer code { font-family: var(--mono); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Reporting Frames Inventory</h1>
+    <p class="subtitle">A domain-specific FrameNet inventory for legal reporting obligations</p>
+  </header>
+
+  <p class="lead">
+    This tool annotates English legal provisions with a small, domain-specific
+    inventory of <a href="https://framenet.icsi.berkeley.edu/">FrameNet</a> frames
+    tailored to <strong>reporting obligations</strong> in European Union law. The
+    general-purpose frames below are adapted so that their frame elements (FEs)
+    align with the participants and temporal parameters characteristic of this
+    domain: <em>who</em> must report <em>what</em>, <em>to whom</em>, and
+    <em>when</em>. Each frame is serialised to its
+    <a href="https://w3id.org/framester/sparql">Framester</a> URI, making every
+    annotation interoperable linked data.
+  </p>
+
+  <div class="order">
+    <strong>Annotation priority.</strong> For a given sentence the annotator
+    returns up to three frames, ordered by relevance to reporting duties:
+    <ol>
+      <li><code>Telling</code> &rarr; <code>Request</code> &rarr; <code>Receiving</code> &rarr; <code>Conditional_scenario</code> &rarr; <code>Time_period_of_action</code> &rarr; <code>Time_vector</code> &rarr; <code>Frequency</code> &rarr; <code>Calendric_unit</code></li>
+    </ol>
+  </div>
+
+  <!-- 1. Telling -->
+  <section class="frame primary">
+    <div class="frame-head">
+      <span class="frame-num">1</span>
+      <h2>Telling</h2>
+      <span class="badge">core reporting act</span>
+      <a class="fst-link" href="https://w3id.org/framester/framenet/abox/frame/Telling" target="_blank" rel="noopener">Framester &#x2197;</a>
+    </div>
+    <p class="desc">A Speaker (the obligated party) communicates a Message to an Addressee (typically a competent authority) &mdash; the core reporting act, evoked by verbs such as <em>inform, notify, report, submit, disclose, communicate</em>. Distinct from <code>Request</code>: the duty-bearer is <strong>transmitting</strong> information, not asking another party to act.</p>
+    <div class="fes">
+      <div class="fe-group">
+        <h3>Core frame elements</h3>
+        <div class="chips">
+          <span class="chip core">Speaker</span>
+          <span class="chip core">Addressee</span>
+          <span class="chip core">Message</span>
+        </div>
+      </div>
+      <div class="fe-group">
+        <h3>Non-core frame elements</h3>
+        <div class="chips">
+          <span class="chip noncore">Topic</span>
+          <span class="chip noncore">Medium</span>
+          <span class="chip noncore">Time</span>
+          <span class="chip noncore">Manner</span>
+          <span class="chip noncore">Means</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. Request -->
+  <section class="frame">
+    <div class="frame-head">
+      <span class="frame-num">2</span>
+      <h2>Request</h2>
+      <a class="fst-link" href="https://w3id.org/framester/framenet/abox/frame/Request" target="_blank" rel="noopener">Framester &#x2197;</a>
+    </div>
+    <p class="desc">A Speaker asks an Addressee or Recipient for something, or to carry out some action &mdash; e.g. an authority requiring a regulated entity to submit information (&ldquo;the Authority <em>may require</em> &hellip;&rdquo;).</p>
+    <div class="fes">
+      <div class="fe-group">
+        <h3>Core frame elements</h3>
+        <div class="chips">
+          <span class="chip core">Speaker</span>
+          <span class="chip core">Addressee</span>
+          <span class="chip core">Recipient</span>
+          <span class="chip core">Message</span>
+          <span class="chip core">Message_argument</span>
+          <span class="chip core">Medium</span>
+        </div>
+      </div>
+      <div class="fe-group">
+        <h3>Non-core frame elements</h3>
+        <div class="chips">
+          <span class="chip noncore">Manner</span>
+          <span class="chip noncore">Means</span>
+          <span class="chip noncore">Time</span>
+          <span class="chip noncore">Beneficiary</span>
+          <span class="chip noncore">Topic</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Receiving -->
+  <section class="frame">
+    <div class="frame-head">
+      <span class="frame-num">3</span>
+      <h2>Receiving</h2>
+      <a class="fst-link" href="https://w3id.org/framester/framenet/abox/frame/Receiving" target="_blank" rel="noopener">Framester &#x2197;</a>
+    </div>
+    <p class="desc">A Recipient comes into possession of a Theme transferred from a Donor &mdash; e.g. an authority receives a report submitted by a regulated entity. The complement to <code>Telling</code> from the recipient's perspective.</p>
+    <div class="fes">
+      <div class="fe-group">
+        <h3>Core frame elements</h3>
+        <div class="chips">
+          <span class="chip core">Donor</span>
+          <span class="chip core">Recipient</span>
+          <span class="chip core">Theme</span>
+        </div>
+      </div>
+      <div class="fe-group">
+        <h3>Non-core frame elements</h3>
+        <div class="chips">
+          <span class="chip noncore">Means</span>
+          <span class="chip noncore">Manner</span>
+          <span class="chip noncore">Place</span>
+          <span class="chip noncore">Time</span>
+          <span class="chip noncore">Purpose_of_theme</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Conditional_scenario -->
+  <section class="frame">
+    <div class="frame-head">
+      <span class="frame-num">4</span>
+      <h2>Conditional_scenario</h2>
+      <a class="fst-link" href="https://w3id.org/framester/framenet/abox/frame/Conditional_scenario" target="_blank" rel="noopener">Framester &#x2197;</a>
+    </div>
+    <p class="desc">A situation where two mutually exclusive possibilities are presented, each with a consequence. Typical of conditional reporting triggers (&ldquo;if &hellip; then the entity shall report &hellip;&rdquo;).</p>
+    <div class="fes">
+      <div class="fe-group">
+        <h3>Core frame elements</h3>
+        <div class="chips">
+          <span class="chip core">Profiled_possibility</span>
+          <span class="chip core">Opposite_possibility</span>
+          <span class="chip core">Consequence</span>
+          <span class="chip core">Anti_consequence</span>
+        </div>
+      </div>
+      <div class="fe-group">
+        <h3>Non-core frame elements</h3>
+        <p class="none">&mdash;</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Time_period_of_action -->
+  <section class="frame">
+    <div class="frame-head">
+      <span class="frame-num">5</span>
+      <h2>Time_period_of_action</h2>
+      <a class="fst-link" href="https://w3id.org/framester/framenet/abox/frame/Time_period_of_action" target="_blank" rel="noopener">Framester &#x2197;</a>
+    </div>
+    <p class="desc">Denotes a period of time in which an Action is possible or required, with optional Duration and Agent &mdash; e.g. a window within which a report must be filed.</p>
+    <div class="fes">
+      <div class="fe-group">
+        <h3>Core frame elements</h3>
+        <div class="chips">
+          <span class="chip core">Action</span>
+          <span class="chip core">Agent</span>
+          <span class="chip core">Duration</span>
+        </div>
+      </div>
+      <div class="fe-group">
+        <h3>Non-core frame elements</h3>
+        <div class="chips">
+          <span class="chip noncore">Whole</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Time_vector -->
+  <section class="frame">
+    <div class="frame-head">
+      <span class="frame-num">6</span>
+      <h2>Time_vector</h2>
+      <a class="fst-link" href="https://w3id.org/framester/framenet/abox/frame/Time_vector" target="_blank" rel="noopener">Framester &#x2197;</a>
+    </div>
+    <p class="desc">An Event occurs at a particular Distance and Direction from a Landmark_event. Direction is often incorporated into the lexical unit (e.g. &ldquo;ago&rdquo;, &ldquo;before&rdquo;), used to express deadlines relative to a reference point.</p>
+    <div class="fes">
+      <div class="fe-group">
+        <h3>Core frame elements</h3>
+        <div class="chips">
+          <span class="chip core">Direction</span>
+          <span class="chip core">Distance</span>
+          <span class="chip core">Event</span>
+          <span class="chip core">Landmark_event</span>
+        </div>
+      </div>
+      <div class="fe-group">
+        <h3>Non-core frame elements</h3>
+        <p class="none">&mdash;</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. Frequency -->
+  <section class="frame">
+    <div class="frame-head">
+      <span class="frame-num">7</span>
+      <h2>Frequency</h2>
+      <a class="fst-link" href="https://w3id.org/framester/framenet/abox/frame/Frequency" target="_blank" rel="noopener">Framester &#x2197;</a>
+    </div>
+    <p class="desc">An Event recurs on a regular basis, characterized by how often it occurs over an Interval (e.g. &ldquo;quarterly&rdquo;, &ldquo;annually&rdquo;, &ldquo;every month&rdquo;) &mdash; the periodicity of recurring reporting obligations.</p>
+    <div class="fes">
+      <div class="fe-group">
+        <h3>Core frame elements</h3>
+        <div class="chips">
+          <span class="chip core">Event</span>
+          <span class="chip core">Interval</span>
+        </div>
+      </div>
+      <div class="fe-group">
+        <h3>Non-core frame elements</h3>
+        <div class="chips">
+          <span class="chip noncore">Attribute</span>
+          <span class="chip noncore">Degree</span>
+          <span class="chip noncore">Rate</span>
+          <span class="chip noncore">Salient_entity</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. Calendric_unit -->
+  <section class="frame">
+    <div class="frame-head">
+      <span class="frame-num">8</span>
+      <h2>Calendric_unit</h2>
+      <a class="fst-link" href="https://w3id.org/framester/framenet/abox/frame/Calendric_unit" target="_blank" rel="noopener">Framester &#x2197;</a>
+    </div>
+    <p class="desc">Names a conventional Unit of time within a calendric system (e.g. day, week, month, quarter, year), optionally positioned by Relative_time or within a larger Whole &mdash; granular temporal parameters of reporting requirements.</p>
+    <div class="fes">
+      <div class="fe-group">
+        <h3>Core frame elements</h3>
+        <div class="chips">
+          <span class="chip core">Unit</span>
+          <span class="chip core">Name</span>
+          <span class="chip core">Relative_time</span>
+        </div>
+      </div>
+      <div class="fe-group">
+        <h3>Non-core frame elements</h3>
+        <div class="chips">
+          <span class="chip noncore">Whole</span>
+          <span class="chip noncore">Salient_event</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Frame definitions are the authoritative inventory used by this tool's
+    annotator (<code>ClaudeClient</code> system prompt). Frame URIs resolve into the
+    <a href="https://w3id.org/framester/sparql">Framester</a> linked data hub.
+    Annotations are exported as Turtle RDF using the
+    <a href="https://persistence.uni-leipzig.org/nlp2rdf/">NIF</a> standard.
+  </footer>
+</div>
+</body>
+</html>
