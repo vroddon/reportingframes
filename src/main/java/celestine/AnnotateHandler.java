@@ -35,13 +35,20 @@ public class AnnotateHandler implements HttpHandler {
             return;
         }
 
-        System.out.println("[annotate] sentence: " + sentence);
+        String format = parseFormParam(body, "format");
+        boolean turtle = "ttl".equalsIgnoreCase(format);
+
+        System.out.println("[annotate] sentence: " + sentence + (turtle ? " [TTL]" : ""));
         try {
             String annotation = claude.annotate(sentence);
-            String resolved  = OffsetResolver.resolve(annotation);
-            sendJson(exchange, 200, resolved);
+            String resolved   = OffsetResolver.resolve(annotation);
+            if (turtle) {
+                String ttl = FramesterSerializer.toTurtle(resolved);
+                sendTurtle(exchange, 200, ttl);
+            } else {
+                sendJson(exchange, 200, resolved);
+            }
         } catch (Exception e) {
-            // Log the full stack trace server-side so failures are diagnosable.
             System.err.println("[annotate] failed for sentence: " + sentence);
             e.printStackTrace();
             String message = e.getMessage() == null ? e.toString() : e.getMessage();
@@ -62,6 +69,13 @@ public class AnnotateHandler implements HttpHandler {
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
         exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
         sendResponse(exchange, status, json);
+    }
+
+    private void sendTurtle(HttpExchange exchange, int status, String ttl) throws IOException {
+        exchange.getResponseHeaders().set("Content-Type", "text/turtle; charset=UTF-8");
+        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+        exchange.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"annotation.ttl\"");
+        sendResponse(exchange, status, ttl);
     }
 
     // Parses application/x-www-form-urlencoded body

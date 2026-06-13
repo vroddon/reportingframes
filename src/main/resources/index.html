@@ -37,17 +37,6 @@
       border-radius: 3px;
     }
     button:disabled { background: #aaa; cursor: default; }
-    #output {
-      margin-top: 24px;
-      white-space: pre-wrap;
-      background: #fff;
-      border: 1px solid #ddd;
-      border-radius: 3px;
-      padding: 16px;
-      min-height: 60px;
-      font-size: 0.95em;
-      display: none;
-    }
     #status { margin-top: 8px; color: #666; font-size: 0.9em; }
 
     /* ── Visualization ── */
@@ -113,19 +102,22 @@
 </head>
 <body>
   <h1>Annotator of reporting-related FrameNet frames in legal documents</h1>
-  <p class="subtitle">Frames: Conditional_scenario · Request · Time_period_of_action · Time_vector · Receiving · Calendric_unit · Frequency</p>
+  <p class="subtitle">Frames: Telling · Request · Receiving · Conditional_scenario · Time_period_of_action · Time_vector · Frequency · Calendric_unit</p>
+  <p class="subtitle"><a href="/frames.html">→ About these frames (inventory &amp; frame elements)</a></p>
 
   <textarea id="sentence" placeholder="Paste some text here..."></textarea>
   <br>
   <button id="btn" onclick="annotate()">Annotate</button>
+  <button id="btn-json" onclick="downloadJson()" disabled
+          style="margin-left:8px;background:#5a7a3a;">Download JSON</button>
+  <button id="btn-ttl" onclick="downloadTurtle()" disabled
+          style="margin-left:8px;background:#5a7a3a;">Download Turtle</button>
   <div id="status"></div>
 
   <div id="viz">
     <h2>Annotation</h2>
     <div id="viz-frames"></div>
   </div>
-
-  <pre id="output"></pre>
 
   <script>
     // Colour palette for FE spans (cycles if more than 8 FEs)
@@ -140,20 +132,25 @@
       { bg: '#f0ffd4', fg: '#3d5c00' },
     ];
 
+    // Holds the most recent annotation JSON so it can be downloaded on demand.
+    let lastJson = null;
+
     async function annotate() {
       const sentence = document.getElementById('sentence').value.trim();
       if (!sentence) return;
 
-      const btn    = document.getElementById('btn');
-      const status = document.getElementById('status');
-      const output = document.getElementById('output');
-      const viz    = document.getElementById('viz');
+      const btn     = document.getElementById('btn');
+      const status  = document.getElementById('status');
+      const viz     = document.getElementById('viz');
+      const btnJson = document.getElementById('btn-json');
+      const btnTtl  = document.getElementById('btn-ttl');
 
       btn.disabled = true;
+      btnJson.disabled = true;
+      btnTtl.disabled = true;
       status.textContent = 'Annotating…';
-      output.style.display = 'none';
-      output.textContent = '';
       viz.style.display = 'none';
+      lastJson = null;
 
       try {
         const resp = await fetch('/annotate', {
@@ -162,15 +159,50 @@
           body: 'sentence=' + encodeURIComponent(sentence)
         });
         const json = await resp.json();
-        output.textContent = JSON.stringify(json, null, 2);
-        output.style.display = 'block';
-        status.textContent = resp.ok ? '' : 'Error from server.';
-        if (resp.ok && json.frames && json.frames.length > 0) renderViz(json);
+        if (!resp.ok) {
+          status.textContent = 'Error from server.';
+          return;
+        }
+        lastJson = json;
+        status.textContent = (json.frames && json.frames.length > 0)
+          ? '' : 'No reporting-related frame detected.';
+        if (json.frames && json.frames.length > 0) renderViz(json);
+        btnJson.disabled = false;
+        btnTtl.disabled = false;
       } catch (e) {
         status.textContent = 'Request failed: ' + e.message;
       } finally {
         btn.disabled = false;
       }
+    }
+
+    function downloadJson() {
+      if (!lastJson) return;
+      const blob = new Blob([JSON.stringify(lastJson, null, 2)], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'annotation.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function downloadTurtle() {
+      const sentence = document.getElementById('sentence').value.trim();
+      if (!sentence) return;
+      const resp = await fetch('/annotate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'sentence=' + encodeURIComponent(sentence) + '&format=ttl'
+      });
+      const ttl = await resp.text();
+      const blob = new Blob([ttl], { type: 'text/turtle' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = 'annotation.ttl';
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
     function renderViz(data) {
@@ -267,7 +299,7 @@
     });
   </script>
   <footer style="margin-top:48px;padding-top:16px;border-top:1px solid #ddd;font-size:0.8em;color:#888;">
-    <p>Celéstine Lecat, Víctor Rodríguez-Doncel, Monica Palmirani<br>
+    <p>Célestine Lecat, Víctor Rodríguez-Doncel, Monica Palmirani<br>
     Università di Bologna · Universidad Politécnica de Madrid</p>
     <p><em>Disclaimer: this is a toy prototype. Do not consider this output seriously.</em></p>
   </footer>

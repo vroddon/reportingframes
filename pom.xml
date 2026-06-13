@@ -26,6 +26,12 @@
             <artifactId>gson</artifactId>
             <version>2.10.1</version>
         </dependency>
+        <dependency>
+            <groupId>org.apache.jena</groupId>
+            <artifactId>apache-jena-libs</artifactId>
+            <version>4.10.0</version>
+            <type>pom</type>
+        </dependency>
     </dependencies>
 
     <build>
@@ -48,6 +54,11 @@
                                         <Implementation-Version>${project.version}</Implementation-Version>
                                         <Build-Time>${build.timestamp}</Build-Time>
                                     </manifestEntries>
+                                </transformer>
+                                <!-- Merge Jena's ServiceLoader registrations so writers/readers survive shading -->
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.AppendingTransformer">
+                                    <resource>META-INF/services/org.apache.jena.sys.JenaSubsystem</resource>
                                 </transformer>
                             </transformers>
                         </configuration>

@@ -21,12 +21,46 @@ public class OffsetResolver {
                 ? root.get("sentence").getAsString() : "";
 
         if (root.has("frames") && root.get("frames").isJsonArray()) {
-            for (JsonElement el : root.getAsJsonArray("frames")) {
+            JsonArray frames = root.getAsJsonArray("frames");
+            for (JsonElement el : frames) {
                 resolveFrame(el.getAsJsonObject(), fullText);
             }
+            root.add("frames", prioritise(frames));
         }
 
         return root.toString();
+    }
+
+    // Frame ordering by relevance to reporting duties. Telling (the core
+    // reporting act) is top priority; any frame not listed sorts after these.
+    private static final String[] PRIORITY = {
+        "Telling", "Request", "Receiving", "Conditional_scenario",
+        "Time_period_of_action", "Time_vector", "Frequency", "Calendric_unit"
+    };
+
+    /**
+     * Reorders frames by the priority list above (Telling first). The sort is
+     * stable, so frames sharing a rank — and any unlisted frames — keep their
+     * original relative order.
+     */
+    private static JsonArray prioritise(JsonArray frames) {
+        java.util.List<JsonElement> list = new java.util.ArrayList<>();
+        frames.forEach(list::add);
+        list.sort(java.util.Comparator.comparingInt(OffsetResolver::rank));
+        JsonArray reordered = new JsonArray();
+        list.forEach(reordered::add);
+        return reordered;
+    }
+
+    private static int rank(JsonElement el) {
+        if (!el.isJsonObject()) return PRIORITY.length;
+        JsonObject obj = el.getAsJsonObject();
+        if (!obj.has("frame") || obj.get("frame").isJsonNull()) return PRIORITY.length;
+        String name = obj.get("frame").getAsString();
+        for (int i = 0; i < PRIORITY.length; i++) {
+            if (PRIORITY[i].equals(name)) return i;
+        }
+        return PRIORITY.length;
     }
 
     private static void resolveFrame(JsonObject frameObj, String fullText) {

@@ -25,42 +25,47 @@ public class ClaudeClient {
     private static final int MAX_TOKENS = 1024;
 
     private static final String SYSTEM_PROMPT = """
-You are a FrameNet semantic annotator. Given an English sentence, identify up to 3 frames it evokes from the list below, ordered by relevance to reporting duties in legal documents. Prioritise frames in this order: Request, Receiving, Conditional_scenario, Time_period_of_action, Time_vector, Frequency, Calendric_unit.
+You are a FrameNet semantic annotator. Given an English sentence, identify up to 3 frames it evokes from the list below, ordered by relevance to reporting duties in legal documents. Prioritise frames in this order: Telling, Request, Receiving, Conditional_scenario, Time_period_of_action, Time_vector, Frequency, Calendric_unit.
 
 FRAMES:
 
-1. Conditional_scenario
-   A situation where two mutually exclusive possibilities are presented, each with a consequence.
-   Core FEs: Profiled_possibility, Opposite_possibility, Consequence, Anti_consequence
+1. Telling
+   A Speaker (the obligated party) communicates a Message to an Addressee (typically a competent authority). This is the core reporting act, evoked by verbs such as inform, notify, report, submit, disclose, communicate, tell, advise. Distinguish from Request: Telling is the duty-bearer transmitting information, whereas Request is a party asking another to act.
+   Core FEs: Speaker, Addressee, Message
+   Non-core FEs: Topic, Medium, Time, Manner, Means
 
 2. Request
    A Speaker asks an Addressee or Recipient for something or to carry out some action.
    Core FEs: Speaker, Addressee, Recipient, Message, Message_argument, Medium
    Non-core FEs: Manner, Means, Time, Beneficiary, Topic
 
-3. Time_period_of_action
-   Denotes a period of time in which an Action is possible or required, with optional Duration and Agent.
-   Core FEs: Action, Agent, Duration
-   Non-core FEs: Whole
-
-4. Time_vector
-   An Event occurs at a particular Distance and Direction from a Landmark_event. Direction is often incorporated into the lexical unit (e.g. "ago", "before").
-   Core FEs: Direction, Distance, Event, Landmark_event
-
-5. Receiving
+3. Receiving
    A Recipient comes into possession of a Theme transferred from a Donor (e.g. an authority receives a report submitted by an entity).
    Core FEs: Donor, Recipient, Theme
    Non-core FEs: Means, Manner, Place, Time, Purpose_of_theme
 
-6. Calendric_unit
-   Names a conventional Unit of time within a calendric system (e.g. day, week, month, quarter, year), optionally positioned by Relative_time or within a larger Whole.
-   Core FEs: Unit, Name, Relative_time
-   Non-core FEs: Whole, Salient_event
+4. Conditional_scenario
+   A situation where two mutually exclusive possibilities are presented, each with a consequence.
+   Core FEs: Profiled_possibility, Opposite_possibility, Consequence, Anti_consequence
+
+5. Time_period_of_action
+   Denotes a period of time in which an Action is possible or required, with optional Duration and Agent.
+   Core FEs: Action, Agent, Duration
+   Non-core FEs: Whole
+
+6. Time_vector
+   An Event occurs at a particular Distance and Direction from a Landmark_event. Direction is often incorporated into the lexical unit (e.g. "ago", "before").
+   Core FEs: Direction, Distance, Event, Landmark_event
 
 7. Frequency
    An Event recurs on a regular basis, characterized by how often it occurs over an Interval (e.g. "quarterly", "annually", "every month").
    Core FEs: Event, Interval
    Non-core FEs: Attribute, Degree, Rate, Salient_entity
+
+8. Calendric_unit
+   Names a conventional Unit of time within a calendric system (e.g. day, week, month, quarter, year), optionally positioned by Relative_time or within a larger Whole.
+   Core FEs: Unit, Name, Relative_time
+   Non-core FEs: Whole, Salient_event
 
 RULES:
 - Identify the TARGET: the content word or phrase (main verb, noun, adjective, adverb) that lexically evokes the frame. Modal auxiliaries (shall, must, may, should, will) are never targets — look for the main verb they modify.

@@ -4,12 +4,18 @@ A minimal Java web application that annotates English sentences with FrameNet fr
 
 ## Supported Frames
 
+Frames are listed in priority order (the annotator returns up to 3 per sentence, with higher-priority frames first):
+
 | Frame | Core Frame Elements |
 |---|---|
-| **Conditional_scenario** | Profiled_possibility, Opposite_possibility, Consequence, Anti_consequence |
+| **Telling** | Speaker, Addressee, Message |
 | **Request** | Speaker, Addressee, Recipient, Message, Message_argument, Medium |
+| **Receiving** | Donor, Recipient, Theme |
+| **Conditional_scenario** | Profiled_possibility, Opposite_possibility, Consequence, Anti_consequence |
 | **Time_period_of_action** | Action, Agent, Duration |
 | **Time_vector** | Direction, Distance, Event, Landmark_event |
+| **Frequency** | Event, Interval |
+| **Calendric_unit** | Unit, Name, Relative_time |
 
 ## Requirements
 
@@ -111,7 +117,13 @@ Convert the frame definitions and annotations produced by Celestine into a prope
 
 ### Connect to Framester
 
-**Framester** (Gangemi, Alam, Asprino, Presutti, Recupero — EKAW 2016; https://framester.github.io/) is a large-scale RDF/OWL linked data hub that integrates FrameNet, WordNet, VerbNet, PropBank and DBpedia into a single graph, with frames represented as OWL classes and frame elements as properties. It is the most complete existing RDF treatment of FrameNet and a natural upper layer for Celestine's domain-specific frame vocabulary. Linking Celestine annotations to Framester URIs would make them interoperable with any other resource already aligned to Framester.
+**Framester** (Gangemi, Alam, Asprino, Presutti, Recupero — EKAW 2016) is a large-scale RDF/OWL linked data hub created at CNR / Università di Bologna. It integrates FrameNet, WordNet 3.0, VerbNet 3.1, BabelNet, DBpedia, Yago and DOLCE-Zero into a single strongly connected knowledge graph, with frames formalised as OWL classes and frame elements as properties. This goes beyond a simple RDF dump of FrameNet: the formal OWL treatment enables full-fledged reasoning and SPARQL querying across all connected resources simultaneously.
+
+Framester exposes a live SPARQL endpoint at https://w3id.org/framester/sparql and its data is available at https://github.com/framester/Framester. A companion service, Word Frame Disambiguation (WFD), maps words to frames via WordNet/BabelNet synsets and can serve as a cross-check against Claude's annotations.
+
+**Celestine already uses Framester URIs** for its Turtle export: each detected frame is serialised as a reference to its Framester URI (e.g. `fst:Request`, `fst:Receiving`), making every downloaded `.ttl` file directly interoperable with the Framester ecosystem. A single SPARQL query to Framester's endpoint can then reveal the ontological neighbourhood of any annotated frame — parent frames, inherited FEs, related frames — without any additional code.
+
+The connection to DOLCE-Zero is particularly relevant for the Celestine team: ALLOT, the legal ontology developed by Monica Palmirani's group at Università di Bologna, is also grounded in DOLCE, creating a natural bridge between Celestine's frame annotations and ALLOT's model of legal agents, roles and events.
 
 > Gangemi, A., Alam, M., Asprino, L., Presutti, V., & Recupero, D. R. (2016). *Framester: A Wide Coverage Linguistic Linked Data Hub.* In EKAW 2016, Springer LNAI 10024.
 

@@ -1,0 +1,245 @@
+\documentclass[10pt, a4paper, twocolumn]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{times}
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{amsmath}
+\usepackage{cite}
+\usepackage{geometry}
+\geometry{a4paper, top=2.5cm, bottom=2.5cm, left=2cm, right=2cm, columnsep=0.6cm}
+
+% ---------------------------------------------------------------
+\title{\textbf{Frame Annotation of Legal Reporting Obligations:\\
+A Dataset and Baseline}}
+ 
+\author{
+  Célestine Lecat$^{1}$ \quad Víctor Rodríguez-Doncel$^{2}$ \quad Monica Palmirani$^{1}$ \\
+  \\
+  $^{1}$Università di Bologna, Bologna, Italy \\
+  $^{2}$Universidad Politécnica de Madrid, Madrid, Spain \\
+  \\
+  \texttt{\{celestine.lecat, monica.palmirani\}@unibo.it} \\
+  \texttt{vrodriguez@fi.upm.es}
+}
+
+\date{}
+% ---------------------------------------------------------------
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+TODO. This paper presents a gold standard dataset of legal provisions
+annotated with FrameNet frames, focusing on reporting obligations
+in European Union law. We define a domain-specific frame inventory,
+describe the annotation methodology, and provide a baseline annotation
+system built on a large language model. We discuss applications of the
+resource to legal knowledge representation, compliance analysis, and
+frame-based reasoning.
+\end{abstract}
+
+% ---------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+
+Reporting obligations are among the most pervasive instruments of European
+Union regulation. Across domains as diverse as banking, insurance, financial
+markets, data protection, environmental protection and product safety, EU
+legislation routinely requires regulated actors to transmit specified
+information to a competent authority, frequently on a recurring basis and
+within strict time limits. A credit institution must file prudential reports to
+its supervisor at regular intervals; a data controller must notify the
+supervisory authority of a personal-data breach without undue delay and, where
+feasible, within seventy-two hours; an operator must report emissions or
+incidents to a designated agency. Despite their diversity, such provisions
+share a recognisable semantic structure: an obligated party, an act of
+submitting or notifying, a recipient authority, the information to be reported,
+and temporal parameters expressing deadlines, periodicity or reference points.
+
+The volume and heterogeneity of these obligations has itself become a
+regulatory concern. Scattered across hundreds of legal acts and drafted in
+dense natural language, reporting requirements are costly to identify, monitor
+and keep current, which has motivated efforts both to rationalise them at the
+policy level and to represent them formally. On the formal side, Palmirani et
+al.~\cite{palmirani-2025-reporting} propose an ontology dedicated to reporting
+requirements in European legislation, modelling the actors involved, the
+content to be reported and the temporal conditions that govern it. Populating
+such a model, however, presupposes the ability to locate and interpret the
+relevant provisions in the legal text itself, a step that remains largely
+manual.
+
+Frame semantics offers a natural intermediate representation for this step.
+Prior work on contract law, for example
+ContractFrames~\cite{navas-loro-2019-contractframes}, has shown that
+frame-based structures can bridge natural-language legal text and formal logic
+by capturing events and their participants in a normalised form. We pursue an
+analogous strategy for regulatory reporting: we annotate the provisions that
+impose reporting duties with FrameNet~\cite{baker-etal-1998-berkeley} frames,
+making explicit who must report what, to whom, and when, and we serialise the
+result as interoperable linked data so that it can feed ontologies such as the
+one above.
+
+In this paper we make the following contributions. First, we define a
+domain-specific inventory of FrameNet frames tailored to reporting obligations,
+adapting general-purpose frames so that their frame elements align with the
+participants and temporal parameters characteristic of this domain. Second, we
+present a gold-standard dataset of EU legal provisions annotated with this
+inventory, together with the annotation methodology. Third, we provide a
+baseline annotation system built on a large language model and evaluate it
+against the gold standard. Finally, we discuss applications of the resource to
+legal knowledge graphs and compliance analysis.
+
+% ---------------------------------------------------------------
+\section{State of the Art}
+\label{sec:soa}
+
+\textbf{FrameNet.}
+FrameNet~\cite{baker-etal-1998-berkeley} is a lexical database of English grounded in
+frame semantics~\cite{fillmore-1982-frame}, the theory that words evoke structured
+conceptual frames representing stereotypical situations, events or relations.
+Each frame defines a set of participants called Frame Elements (FEs), which may
+be core (semantically obligatory) or non-core (peripheral). FrameNet 1.7
+contains over 1{,}200 frames, 13{,}000 lexical units and 200{,}000 annotated
+example sentences. Frames are interconnected through ontological relations such
+as \textit{Inheritance}, \textit{Using}, \textit{Subframe} and
+\textit{Perspective\_on}, forming a rich semantic network that supports both
+lexicographic and computational applications.
+
+\textbf{Framester.}
+Framester~\cite{gangemi2016framester} is a large-scale RDF/OWL linked data hub
+developed at CNR and Università di Bologna that integrates FrameNet with
+WordNet, VerbNet, BabelNet, DBpedia, Yago and the DOLCE-Zero foundational
+ontology into a single strongly connected knowledge graph. Frames are
+formalised as OWL classes, frame elements as properties, and lexical units as
+linked data resources, enabling full-fledged SPARQL querying and OWL reasoning
+over frame-based knowledge. Framester exposes a public SPARQL
+endpoint\footnote{\url{https://w3id.org/framester/sparql}} and its data is
+available on GitHub.\footnote{\url{https://github.com/framester/Framester}}
+In this work, Framester URIs are used to serialise frame annotations as
+interoperable Turtle RDF using the NIF standard~\cite{hellmann2013nif}.
+
+\subsection{Frame Semantic Parsing}
+
+Frame semantic parsing is the task of automatically producing FrameNet-style
+analyses of text, conventionally decomposed into three interdependent
+subtasks: frame identification (selecting the frame evoked by a target),
+argument identification (delimiting the spans that fill its roles) and role
+classification (labelling those spans with frame elements). A representative
+recent approach is the double-graph framework of
+Zheng~et~al.~\cite{zheng-etal-2022-double}, whose KID model (Knowledge-guided
+Incremental semantic parser with Double-graph) recasts parsing as incremental
+graph construction. KID couples two graphs: a \textit{Frame Knowledge Graph},
+a static heterogeneous graph that encodes frames and their frame elements
+together with the ontological relations declared in FrameNet, and a
+\textit{Frame Semantic Graph}, the per-sentence structure built up
+incrementally from the text. By letting knowledge-enhanced frame and
+frame-element representations from the former guide the construction of the
+latter, the model strengthens the interactions between the three subtasks and
+the dependencies among arguments that pipeline systems treat in isolation,
+reporting improvements of up to 1.7~F$_1$ over the previous state of the art
+on two FrameNet benchmarks. This separation between an ontological knowledge
+layer and an instance-level semantic graph is conceptually close to the
+representation we adopt, although our baseline delegates the parsing itself to
+a large language model rather than learning a dedicated graph-construction
+model (Section~\ref{sec:baseline}).
+
+\subsection{Frame Semantics in Legal Text}
+
+The application of frame semantics to legal language has a smaller but growing
+body of work. Closest to our setting, ContractFrames~\cite{navas-loro-2019-contractframes}
+applies a frame-based representation to contract law, extracting events related
+to the status of a purchase contract into frames and mapping them to logic
+clauses of the PROLEG legal-reasoning system through a dedicated Contract
+Workflow Ontology; it thereby uses frames as an intermediate layer between
+natural-language contractual text and formal logic, a role analogous to the one
+we envisage for reporting obligations. More broadly, the enrichment of legal
+documents with interoperable linguistic annotations has been demonstrated at
+platform scale by the Lynx project~\cite{moreno-schneider-2022-lynx}, whose
+service platform processes, enriches and analyses documents from the legal
+domain and represents the resulting linguistic and semantic annotations as
+linked data using the NIF standard. Our work follows the same linked-data
+annotation philosophy, narrowing the focus to FrameNet frames for reporting
+obligations and serialising them through Framester URIs.
+
+Most directly related to our domain, Palmirani et
+al.~\cite{palmirani-2025-reporting} propose a Reporting Requirements Ontology
+for European legislation, a conceptual model that formalises the obligations
+imposed on regulated actors to submit information to authorities, capturing the
+parties involved, the content to be reported, and the temporal conditions such
+as deadlines and periodicity. Whereas that work operates at the ontological
+level, defining the classes and properties needed to represent reporting
+duties, our contribution is complementary and operates at the linguistic level:
+we annotate the textual provisions themselves with FrameNet frames, yielding
+the surface evidence from which such ontological structures can be populated.
+The frame inventory we adopt is in fact designed so that its frames and frame
+elements align with the participants and temporal parameters of reporting
+obligations, providing a natural bridge towards ontologies of this kind.
+
+% ---------------------------------------------------------------
+\section{Dataset}
+\label{sec:dataset}
+
+TODO.
+
+\subsection{Source Corpus}
+
+TODO.
+
+\subsection{Annotation Methodology}
+
+TODO.
+
+\subsection{Dataset Statistics}
+
+TODO.
+
+% ---------------------------------------------------------------
+\section{Baseline Annotation System}
+\label{sec:baseline}
+
+TODO.
+
+\subsection{System Description}
+
+TODO.
+
+\subsection{Evaluation}
+
+TODO.
+
+% ---------------------------------------------------------------
+\section{Applications}
+\label{sec:applications}
+
+TODO.
+
+\subsection{Legal Knowledge Graphs}
+
+TODO.
+
+\subsection{Compliance Analysis}
+
+TODO.
+
+% ---------------------------------------------------------------
+\section{Conclusion}
+\label{sec:conclusion}
+
+TODO.
+
+% ---------------------------------------------------------------
+\section*{Acknowledgements}
+
+TODO.
+
+% ---------------------------------------------------------------
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
